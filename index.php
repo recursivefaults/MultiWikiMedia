@@ -17,21 +17,47 @@
   $m = $_SERVER['REQUEST_METHOD'];
   switch ($m) {
     case 'GET':
-      print_r($_GET);
-      echo "GET RECEIVED\n";
+      if(!isset($_GET['name']) && !isset($_GET['size']) && !isset($_GET['format'])) {
+        echo "Please provide the following parameters: name, size, and format.".PHP_EOL;
+        return;
+      }
+      $name = $_GET['name'];
+      $size = $_GET['size'];
+      $format = $_GET['format'];
+      if(!in_array($format, array('png', 'jpg'))) {
+        echo "Format must be of type jpg or png".PHP_EOL;
+        return;
+      }
+      $dir = $CONFIG['UPLOAD_DIR'];
+      if(!file_exists($dir.'/'.$name)) {
+        echo "Sorry, that file doesn't exist, try uploading it!".PHP_EOL;
+        return;
+      }
+      
+      // Lets go for it. Image Magick time!
+      // $result = shell_exec()
+        
       break;
     case 'POST':
       /**
        * Lets see if we have a file
        */ 
       if($_FILES['image']) {
-        $result = handleFileUpload($_FILES['image']);
-        if($result['error']) {
-          echo $result['error'].PHP_EOL;
-          //Error code
+        $fileHelper = new FileUpload($_FILES['image'], $CONFIG);
+        $success = false;
+        if(!$fileHelper->isInitialized()) {
+          $fileHelper->initializeDirectories();
+        }
+        if(!$fileHelper->isUploadValid()) {
+          echo "We don't recognize the file you've uploaded.".PHP_EOL;
           return;
         }
-        echo $result['success'].PHP_EOL;
+        $success = $fileHelper->writeFile(NULL);
+        if($success) {
+          echo "File successfully uploaded as $success".PHP_EOL;
+          return;
+        }
+        echo "We were unable to upload the file at this time.".PHP_EOL;
       }
       else {
         echo "Please upload a file using the form name 'image'".PHP_EOL;
@@ -42,61 +68,60 @@
       break;
   }
   
-  function handleFileUpload($file) {
-    global $CONFIG;
-    $result = array();
-    if(!initializeDirectories()) {
-      $result['error'] = "Cannot create image directories";
-      return $result;
+
+  /**
+  * A simple class to encapsulate a file upload.
+  */
+  class FileUpload
+  {
+    private $file = NULL;
+    private $config = array();
+    function __construct($file, $config)
+    {
+      $this->file = $file;
+      $this->config = $config;
     }
-    // Lets dig into the file.
-    $name = $file['name'];
-    $size = $file['size'];
-    $type = $file['type']; //Shouldn't be trusted, but use it if we can.
-    $tmp = $file['tmp_name'];
-    if(!testFileType($name, $type)) {
-      $final = join($CONFIG['EXTENSIONS'], ', ');
-      $result['error'] = "We only accept files of the following types: $final";
+    public function isInitialized()
+    {
+      return file_exists($this->config['UPLOAD_DIR']);
     }
-    $result = moveUploadedFile($tmp, $name);
-    return $result;
-  }
-  
-  function moveUploadedFile($tmp, $name) {
-    //TODO: Don't use the filename, create a hash, to avoid collisions.
-    global $CONFIG;
-    $result = array();
-    //Ok, the file is fine, lets write it to the filesystem.
-    $success = move_uploaded_file($tmp, $CONFIG['UPLOAD_DIR'] . '/' . $name);
-    if (!$success) {
-      $result['error'] = "There was a problem writing $tmp to $name.".PHP_EOL;
+    
+    public function initializeDirectories()
+    {
+      if(!$this->isInitialized()) {
+        return mkdir($dir);
+      }
+      return true;
     }
-    else {
-      $result['success'] = "File can be retrieved at ./images/".$name;
+    
+    public function isUploadValid()
+    {
+      $type = $this->file['type'];
+      $name = $this->file['name'];
+      if ($type && in_array($type, $this->config['MIME_TYPES'])) {
+        return true;
+      }
+      $extenstion = end(explode('.', $name));
+      return in_array($extenstion, $this->config['EXTENSIONS']);
     }
-    return $result;
+    
+    public function writeFile($nameBuilder)
+    {
+      $name = $this->file['name'];
+      if($nameBuilder) {
+        $name = $nameBuilder.buildName($file);
+      }
+      $tmp = $this->file['tmp_name'];
+      //Ok, the file is fine, lets write it to the filesystem.
+      if(move_uploaded_file($tmp, $this->config['UPLOAD_DIR'] . '/' . $name)) {
+        return $name;
+      }
+      return false;
+    }
+    
     
   }
   
-  function testFileType($name, $type) {
-    global $CONFIG;
-    if ($type && in_array($type, $CONFIG['MIME_TYPES'])) {
-      return true;
-    }
-    $extenstion = end(explode('.', $name));
-    return in_array($extenstion, $CONFIG['EXTENSIONS']);
-  }
-  
-  
-  function initializeDirectories() {
-    global $CONFIG;
-    $dir = $CONFIG['UPLOAD_DIR'];
-    if(!file_exists($dir)) {
-      echo getcwd().$dir.PHP_EOL;
-      return mkdir($dir);
-    }
-    return true;
-  }
 
 
 ?>
