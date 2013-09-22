@@ -33,27 +33,34 @@
     case 'POST':
       /**
        * Lets see if we have a file
-       */ 
-      if($_FILES['image']) {
-        $fileHelper = new FileUpload($_FILES['image'], $CONFIG);
+       */
+      if(sizeof($_FILES) == 0) {
+        echo "Please post an image with a form to continue!".PHP_EOL;
+        return;
+      }
+      $results = array();
+      foreach ($_FILES as $key => $value) {
+        $fileHelper = new FileUpload($value, $CONFIG);
         $success = false;
         if(!$fileHelper->isInitialized()) {
           $fileHelper->initializeDirectories();
         }
         if(!$fileHelper->isUploadValid()) {
-          echo "We don't recognize the file you've uploaded.".PHP_EOL;
-          return;
+          $results[$key] = "We don't recognize the file you've uploaded.".PHP_EOL;
+          continue;
         }
-        $success = $fileHelper->writeFile(new ShaNameBuilder($_FILES['image']));
+        $success = $fileHelper->writeFile(new ShaNameBuilder($value));
         if($success) {
-          echo "File successfully uploaded as $success".PHP_EOL;
-          return;
+          $results[$key] = "File successfully uploaded as $success".PHP_EOL;
+          continue;
         }
-        echo "We were unable to upload the file at this time.".PHP_EOL;
+        $results[$key] = "We were unable to upload your file at this time.".PHP_EOL;
       }
-      else {
-        echo "Please upload a file using the form name 'image'".PHP_EOL;
+      $final = "Reults of uploads: \n";
+      foreach ($results as $key => $value) {
+        $final .= "\t$key: $value";
       }
+      echo $final.PHP_EOL;
       break;
     default:
       echo "Sorry, not supported\n";
@@ -244,9 +251,10 @@
     public function buildName() {
       //We want to sha the creation date and name.
       $time = filemtime($this->file['tmp_name']);
+      $tmp = end(explode(DIRECTORY_SEPARATOR, $this->file['tmp_name']));
       $name = $this->file['name'];
       $extension = end(explode('.', $name));
-      return sha1($name.$time).".".$extension;
+      return sha1($name.$tmp.$time).".".$extension;
     }
   }
   
