@@ -29,14 +29,18 @@
         return;
       }
       $dir = $CONFIG['UPLOAD_DIR'];
-      if(!file_exists($dir.'/'.$name)) {
+      $file = $dir.'/'.$name;
+      if(!file_exists($file)) {
         echo "Sorry, that file doesn't exist, try uploading it!".PHP_EOL;
         return;
       }
       
       // Lets go for it. Image Magick time!
-      // $result = shell_exec()
-        
+      $f = explode('.', $name);
+      $file_base = $f[0];
+      $output_file = $dir.'/'.$file_base."-thumb.".$format;
+      echo shell_exec("convert $file -thumbnail $size"."^ $output_file");
+      echo file_get_contents($output_file);
       break;
     case 'POST':
       /**
