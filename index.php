@@ -2,10 +2,12 @@
 /**
  * Constants, should really be configuration driven
  */
- $UPLOAD_DIR = './images';  //Where we store the files on the FS.
- $EXTENSIONS = array('png', 'svg', 'jpg', 'jpeg'); // What extenstion of images we support.
- $MIME_TYPES = array('image/png', 'image/jpg', 'image/jpeg', 'image/svg');
-
+ $CONFIG = array(
+  'UPLOAD_DIR' => './images',
+  'EXTENSIONS' => array('png', 'svg', 'jpg', 'jpeg'),
+  'MIME_TYPES' => array('image/png', 'image/jpg', 'image/jpeg', 'image/svg')
+  
+ );
 /**
  * Let's only accept two types of requests.
  * 1) A post of a file
@@ -41,7 +43,7 @@
   }
   
   function handleFileUpload($file) {
-    global $EXTENSIONS, $UPLOAD_DIR;
+    global $CONFIG;
     $result = array();
     if(!initializeDirectories()) {
       $result['error'] = "Cannot create image directories";
@@ -53,12 +55,19 @@
     $type = $file['type']; //Shouldn't be trusted, but use it if we can.
     $tmp = $file['tmp_name'];
     if(!testFileType($name, $type)) {
-      $final = join($EXTENSIONS, ', ');
+      $final = join($CONFIG['EXTENSIONS'], ', ');
       $result['error'] = "We only accept files of the following types: $final";
     }
-    
+    $result = moveUploadedFile($tmp, $name);
+    return $result;
+  }
+  
+  function moveUploadedFile($tmp, $name) {
+    //TODO: Don't use the filename, create a hash, to avoid collisions.
+    global $CONFIG;
+    $result = array();
     //Ok, the file is fine, lets write it to the filesystem.
-    $success = move_uploaded_file($tmp, $UPLOAD_DIR . '/' . $name);
+    $success = move_uploaded_file($tmp, $CONFIG['UPLOAD_DIR'] . '/' . $name);
     if (!$success) {
       $result['error'] = "There was a problem writing $tmp to $name.".PHP_EOL;
     }
@@ -66,24 +75,25 @@
       $result['success'] = "File can be retrieved at ./images/".$name;
     }
     return $result;
+    
   }
   
   function testFileType($name, $type) {
-    global $MIME_TYPES;
-    global $EXTENSIONS;
-    if ($type && in_array($type, $MIME_TYPES)) {
+    global $CONFIG;
+    if ($type && in_array($type, $CONFIG['MIME_TYPES'])) {
       return true;
     }
     $extenstion = end(explode('.', $name));
-    return in_array($extenstion, $EXTENSIONS);
+    return in_array($extenstion, $CONFIG['EXTENSIONS']);
   }
   
   
   function initializeDirectories() {
-    global $UPLOAD_DIR;
-    if(!file_exists($UPLOAD_DIR)) {
-      echo getcwd().$UPLOAD_DIR.PHP_EOL;
-      return mkdir($UPLOAD_DIR);
+    global $CONFIG;
+    $dir = $CONFIG['UPLOAD_DIR'];
+    if(!file_exists($dir)) {
+      echo getcwd().$dir.PHP_EOL;
+      return mkdir($dir);
     }
     return true;
   }
