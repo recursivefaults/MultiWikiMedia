@@ -22,3 +22,13 @@ Create a “TODO” list of things that would be important to complete in order 
 
 TODOS
 -----
+* Unit Tests!
+* Wrap the thumbnail conversion into a class
+* Instead of shelling out image magick use a PEAR extension (IMagick looks nice)
+* Externalize configuration
+* Make thumbnail/FS manipulation non-blocking
+* Use hashes to identify files instead of names
+* Add an authorization mechanism (API Keys are a good first start)
+* Create knobs to throttle requests and upload sizes
+* Better data sanitizing.
+* Return meaningful http codes.

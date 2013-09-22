@@ -56,7 +56,7 @@
           echo "We don't recognize the file you've uploaded.".PHP_EOL;
           return;
         }
-        $success = $fileHelper->writeFile(NULL);
+        $success = $fileHelper->writeFile(new ShaNameBuilder($_FILES['image']));
         if($success) {
           echo "File successfully uploaded as $success".PHP_EOL;
           return;
@@ -113,7 +113,7 @@
     {
       $name = $this->file['name'];
       if($nameBuilder) {
-        $name = $nameBuilder.buildName($file);
+        $name = $nameBuilder->buildName();
       }
       $tmp = $this->file['tmp_name'];
       //Ok, the file is fine, lets write it to the filesystem.
@@ -122,9 +122,34 @@
       }
       return false;
     }
-    
-    
   }
+  
+  /**
+  * A basic name builder for files.
+  */
+  class BasicNameBuilder
+  {
+    protected $file = NULL;
+    function __construct($file)
+    {
+      $this->file = $file;
+    }
+    
+    public function buildName() {
+      return $this->file['name'];
+    }
+  }
+  
+  class ShaNameBuilder extends BasicNameBuilder {
+    public function buildName() {
+      //We want to sha the creation date and name.
+      $time = filemtime($this->file['tmp_name']);
+      $name = $this->file['name'];
+      $extension = end(explode('.', $name));
+      return sha1($name.$time).".".$extension;
+    }
+  }
+  
   
 
 
