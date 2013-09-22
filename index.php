@@ -17,30 +17,18 @@
   $m = $_SERVER['REQUEST_METHOD'];
   switch ($m) {
     case 'GET':
-      if(!isset($_GET['name']) && !isset($_GET['size']) && !isset($_GET['format'])) {
-        echo "Please provide the following parameters: name, size, and format.".PHP_EOL;
+      $helper = new ThumbnailHelper($_GET, $CONFIG);
+      if(!$helper->isValid()) {
+        echo $helper->getError().PHP_EOL;
         return;
       }
-      $name = $_GET['name'];
-      $size = $_GET['size'];
-      $format = $_GET['format'];
-      if(!in_array($format, array('png', 'jpg'))) {
-        echo "Format must be of type jpg or png".PHP_EOL;
+      $file = $helper->createThumbnail();
+      if($file) {
+        echo file_get_contents($file);
         return;
       }
-      $dir = $CONFIG['UPLOAD_DIR'];
-      $file = $dir.'/'.$name;
-      if(!file_exists($file)) {
-        echo "Sorry, that file doesn't exist, try uploading it!".PHP_EOL;
-        return;
-      }
+      echo "We couldn't serve your request at this time.".PHP_EOL;
       
-      // Lets go for it. Image Magick time!
-      $f = explode('.', $name);
-      $file_base = $f[0];
-      $output_file = $dir.'/'.$file_base."-thumb.".$format;
-      echo shell_exec("convert $file -thumbnail $size"."^ $output_file");
-      echo file_get_contents($output_file);
       break;
     case 'POST':
       /**
@@ -72,24 +60,107 @@
       break;
   }
   
-
+  /**
+  * A simple class to manage thumbnail creation
+  */
+  class ThumbnailHelper
+  {
+    private $options = array(); //These are the $_GET options specified
+    private $formats = array('jpg', 'png');
+    private $error = NULL;
+    function __construct($options, $config)
+    {
+      $this->options = $options;
+      if(!is_null($config)) {
+        $this->config = $config;
+      }
+    }
+    
+    /**
+     * Tells us if the options that have been specified are valid
+     * for creating a thumbnail.
+     */
+    public function isValid()
+    {
+      $opts = $this->options;
+      if(!isset($opts['size']) && !isset($opts['name']) && !isset($opts['format'])) {
+        $this->error = "Please specify the following parameters: size, format, and name.";
+        return false;
+      }
+      if(!in_array($opts['format'], $this->formats)) {
+        $t = join($this->formats, ', ');
+        $this->error = "Format should be one of these: $t";
+        return false;
+      }
+      if(!file_exists($this->config['UPLOAD_DIR'] . '/'. $opts['name'])) {
+        $this->error = "The file you specified doesn't exist.";
+        return false;
+      }
+      if(preg_match("/\d+x\d+/", $opts['size']) == 0) {
+        $this->error = "The size should be specified as {width}x{height}";
+        return false;
+      }
+      return true;
+    }
+    
+    public function getError() {
+      $err = $this->error;
+      $this->error = NULL;
+      return $err;
+    }
+    
+    public function createThumbnail()
+    {
+      $name = $this->options['name'];
+      $size = $this->options['size'];
+      $dir = $this->config['UPLOAD_DIR'];
+      $format = $this->options['format'];
+      // Lets go for it. Image Magick time!
+      $f = explode('.', $name);
+      $base = $dir . '/';
+      $file_base = $f[0];
+      $file = $base . $name;
+      $output_file = $base.$file_base."-thumb.".$format;
+      shell_exec("convert $file -thumbnail $size"."^ $output_file");
+      if(!file_exists($output_file)) {
+        return false;
+      }
+      return $output_file;
+    }
+  }
+  
   /**
   * A simple class to encapsulate a file upload.
+  *
+  * It accepts a file object as it comes in from $_FILES[item].
+  * It also accepts a configuration object that looks like this:
+  * 'UPLOAD_DIR' => directory for uploads
+  * 'EXTENSIONS' => the extensions that are accepted (eg. jpg, gif, png)
+  * 'MIME_TYPES' => if the form specified a mime type, this will help check too.
   */
   class FileUpload
   {
-    private $file = NULL;
-    private $config = array();
+    private $file = NULL;                 // The file object as it exists in $_FILES
+    private $config = array();            // Configuration options
     function __construct($file, $config)
     {
       $this->file = $file;
       $this->config = $config;
     }
+    
+    /**
+     * Return true if the upload directory exists and is ready
+     * return false otherwise.
+     */
     public function isInitialized()
     {
       return file_exists($this->config['UPLOAD_DIR']);
     }
     
+    /**
+     * Create the upload directory as specified in the configuration
+     * object. Return if it was successful or not
+     */
     public function initializeDirectories()
     {
       if(!$this->isInitialized()) {
@@ -98,6 +169,13 @@
       return true;
     }
     
+    /**
+     * Tests the file that was passed in against
+     * the mime type (If it exists), and the extension.
+     * 
+     * The valid options can be specified in the config
+     * object.
+     */
     public function isUploadValid()
     {
       $type = $this->file['type'];
@@ -109,6 +187,15 @@
       return in_array($extenstion, $this->config['EXTENSIONS']);
     }
     
+    /**
+     * Writes the file to the specified upload location
+     *
+     * Takes an optional name building class that will
+     * take responsibility for naming the file.
+     *
+     * Returns the name of the file if uploaded, and 
+     * false if it failed to upload.
+     */
     public function writeFile($nameBuilder)
     {
       $name = $this->file['name'];
@@ -135,11 +222,24 @@
       $this->file = $file;
     }
     
+    /**
+     * Return the name of the file that was uploaded
+     */
     public function buildName() {
       return $this->file['name'];
     }
   }
   
+  /**
+   * A name builder that creates a hash of the name and
+   * creation date.
+   *
+   * This will allow people to upload things wtih similar
+   * names without over-writing each other.
+   * 
+   * The hash is created from the incoming name, and 
+   * the temporary file's creation date.
+   */
   class ShaNameBuilder extends BasicNameBuilder {
     public function buildName() {
       //We want to sha the creation date and name.
